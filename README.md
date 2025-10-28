@@ -1,7 +1,7 @@
 # RamsesNN
 Summary of the main code snipplets used during my master's thesis "Embedding Neural Networks into Dynamic Power System Simulators"
 
-Here is an example workflow to navigate through this repository:
+Here is an example workflow to navigate through this repository. For now, it only explains how to use a NN in FORTRAN/RAMSES. Updates about the whole PowerPINN pipeline will be added in a later commit:
 1) First, the neural network should be trained and exported in .onnx (Open Neural Network Exchange) format. In Python, using PyTorch:
    torch.onnx.export(model, init_cond, "NN.onnx"),
    where init_cond is an example input of the neural network.
