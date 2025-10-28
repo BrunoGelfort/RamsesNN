@@ -1,0 +1,118 @@
+HOW TO USE roseNNa in Visual Studio 2022 - Windows, 64 bits
+
+This follows the steps I went through to install and use roseNNa in Fortran
+It is not at all an optimised workflow. If this is used for debugging, I advise to write a single program that executes all steps 2) - 6)
+
+
+1) Install roseNNa
+
+	https://github.com/comp-physics/roseNNa
+
+
+2) Navigate into the folder "fLibrary"
+
+
+3) Create conda environment for parsing the .onnx file:
+
+(powershell)
+
+	conda create -n roparse python=3.10 -y
+	conda activate roparse
+
+	pip install "numpy<2" onnx==1.15.0 onnxruntime==1.16.3
+	pip install torch --index-url https://download.pytorch.org/whl/cpu
+	pip install fypp
+
+Then, write tiny helper function to pre-infer shapes and run it 
+The .onnx file is called "PINN_v2" here
+
+	$code = @"
+	import onnx, onnx.shape_inference
+	m = onnx.load(r'.\PINN_v2.onnx')
+	m_inf = onnx.shape_inference.infer_shapes(m)
+	onnx.save(m_inf, r'.\PINN_v2_inferred.onnx')
+	print('Wrote PINN_v2_inferred.onnx')
+	"@
+	Set-Content -Encoding ASCII infer_shapes.py $code
+	
+	python .\infer_shapes.py
+
+This helper function loads the model PINN_v2.onnx,
+runs ONNX’s infer_shapes to fill in missing intermediate tensor shapes,
+saves a new file PINN_v2_inferred.onnx (same model + extra shape metadata only)
+
+
+4) Clean lefotvers from previous attempts and parse the .onnx file
+
+	Remove-Item -ErrorAction Ignore onnxModel.txt, onnxWeights.txt, variables.fpp, modelCreator.f90
+
+	python .\modelParserONNX.py -f ".\PINN_v2.onnx" -w ".\PINN_v2.onnx" -i ".\PINN_v2_inferred.onnx"
+
+Confirm that the three files have been created
+
+	Get-ChildItem .\onnxModel.txt, .\onnxWeights.txt, .\variables.fpp
+
+
+5) Generate the Fortran file "modelCreator.f90 via fypp
+
+	python -m fypp .\modelCreator.fpp .\modelCreator.f90
+
+and verify that it exists
+
+	Get-Item .\modelCreator.f90
+
+and modify the c++ syntax of variable declaration/usage to be used in FORTRAN
+
+	(Get-Content .\modelCreator.f90) -replace 'onnx::','' | Set-Content .\modelCreator.f90
+
+
+6) Inside Visual Studio 2022: add the following files to the existing project. 
+
+	activation_funcs.f90
+	derived_types.f90
+	layers.f90
+	reader.f90
+	rosenna.f90
+	modelCreator.f90      <- the one just generated, to be changed for every new PINN architecture
+
+and also place the generated .txt files in the same directory from which the solution executable is called
+
+	onnxModel.txt 		<<- to be changed for every new PINN
+and 
+	onnxWeights.txt		<<- to be changed for every new PINN
+
+
+These are read by the function reader.f90 during the initialisation of roseNNa. If multiple NNs are being used simultaneously, the .txt reading procedure should be updated.
+
+
+
+
+
+
+
+
+
+
+
+
+The following is to solve matrix equations in FORTRAN, and is not needed for default NN use in FORTRAN
+
+7) Finally, machine_solver uses LAPACK to quickly solve a matrix equation. I have the Intel OneAPI Fortran compiler - the following must be activated:
+
+find "Project" in the task bar at the top of the window and navigate:
+
+	Project -> Properties -> Fortran -> Libraries -> Use intel Math Kernel Library
+
+and choose 
+	Parallel (/Qmkl:parallel)
+. Other activations (sequential) might work too, but I have not tested them.
+
+
+
+
+
+
+
+
+
+
